@@ -1,23 +1,22 @@
-var src_default = {
-  async fetch(request, env, ctx) {
-    let response
-    if(request.cf.botManagement.score < 30) {
-          const httpbin = new URL("http://httpbin.org/get");
-          const bot = new Request(httpbin, request);
-          let response = await fetch(bot);
-          return response
-       }
-       else {
-          request = new Request(request)
-          response = await fetch(request, {
-            cf: {
-              resolveOverride: "omniscientsystems.net",
-            },
-          })
-          return response
-       }
-  }
-};
-export {
-  src_default as default
-};
+export default {
+	async fetch(request, env, ctx) {
+		const response = await fetch(request.url);
+		const newResponse = new Response(response.body, response);
+		let userID_Header = request.headers.get('UserID');
+		let userID_Token = await env.UserProfile_KV.get(userID_Header);
+    	const requestURL = new URL(request.url);
+		const path = requestURL.pathname + requestURL.search;
+
+		if (path == '/profile') {
+			newResponse.headers.append("Auth-Token", userID_Token);
+			return newResponse;
+ 	 	}
+		else{
+			return new Response('Error Worker! No UserID!', {
+				headers: {
+					'content-type': 'text/plain',
+				},
+			});
+		}
+	}
+}
