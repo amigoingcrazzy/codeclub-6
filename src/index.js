@@ -1,22 +1,38 @@
 export default {
-	async fetch(request, env, ctx) {
-		const response = await fetch(request.url);
-		const newResponse = new Response(response.body, response);
-		let userID_Header = request.headers.get('UserID');
-		let userID_Token = await env.UserProfile_KV.get(userID_Header);
-    	const requestURL = new URL(request.url);
-		const path = requestURL.pathname + requestURL.search;
+    async fetch(request, env, ctx) {
+		let resp = new Response();
+        let { readable, writable } = new TransformStream();
+        let writer = writable.getWriter();
+        const textEncoder = new TextEncoder();
 
-		if (path == '/profile') {
-			newResponse.headers.append("Auth-Token", userID_Token);
-			return newResponse;
- 	 	}
-		else{
-			return new Response('Error Worker! No UserID!', {
-				headers: {
-					'content-type': 'text/plain',
-				},
-			});
-		}
-	}
-}
+        const city = request.cf.city;
+        const state = request.cf.region;
+        const location = city.concat(", ", state);
+        const question = "Write me a short whimsical shakespearean poem about "
+        const questionWithLocation = question.concat(location);
+
+        const asyncWrite = async () => {
+            const answer = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
+                prompt: questionWithLocation,
+                stream: true
+            });
+            const reader = answer.getReader();
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const chunkString = new TextDecoder().decode(value).slice(6);
+                const chunkJson = JSON.parse(chunkString);
+                await writer.write(textEncoder.encode(chunkJson?.response));
+            }
+            return writer.close();
+        };
+
+        ctx.waitUntil(asyncWrite());
+
+        resp = new Response(readable, {
+            headers: { 'content-type': 'text/event-stream' },
+        });
+
+        return resp;
+    },
+};
