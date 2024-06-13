@@ -1,6 +1,6 @@
 export default {
     async fetch(request, env, ctx) {
-		let resp = new Response();
+	let resp = new Response();
         let { readable, writable } = new TransformStream();
         let writer = writable.getWriter();
         const textEncoder = new TextEncoder();
